@@ -2,8 +2,8 @@ package provider
 
 import (
 	"context"
-	"net/http"
 
+	gocrunchybridge "github.com/adelowo/go-crunchybridge"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -12,7 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
 var _ provider.Provider = &CrunchybridgeProvider{}
 var _ provider.ProviderWithFunctions = &CrunchybridgeProvider{}
 
@@ -24,9 +23,10 @@ type CrunchybridgeProvider struct {
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+// CrunchybridgeProviderModel describes the provider data model.
+type CrunchybridgeProviderModel struct {
+	Secret    types.String `tfsdk:"secret"`
+	UserAgent types.String `tfsdk:"user_agent"`
 }
 
 func (p *CrunchybridgeProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -37,8 +37,13 @@ func (p *CrunchybridgeProvider) Metadata(ctx context.Context, req provider.Metad
 func (p *CrunchybridgeProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+			"secret": schema.StringAttribute{
+				MarkdownDescription: "Your Crunchybridge secret key",
+				Required:            true,
+				Sensitive:           true,
+			},
+			"user_agent": schema.StringAttribute{
+				MarkdownDescription: "Custom useragent",
 				Optional:            true,
 			},
 		},
@@ -46,7 +51,7 @@ func (p *CrunchybridgeProvider) Schema(ctx context.Context, req provider.SchemaR
 }
 
 func (p *CrunchybridgeProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+	var data CrunchybridgeProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
@@ -54,11 +59,23 @@ func (p *CrunchybridgeProvider) Configure(ctx context.Context, req provider.Conf
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
+	var opts []gocrunchybridge.Option
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
+	opts = append(opts,
+		gocrunchybridge.WithAPIKey(gocrunchybridge.APIKey(data.Secret.String())))
+
+	if isStringEmpty(data.UserAgent.String()) {
+		if !data.UserAgent.IsNull() && !data.UserAgent.IsUnknown() {
+			opts = append(opts, gocrunchybridge.WithUserAgent(data.UserAgent.String()))
+		}
+	}
+
+	client, err := gocrunchybridge.New(opts...)
+	if err != nil {
+		resp.Diagnostics.AddError("could not set up sdk", err.Error())
+		return
+	}
+
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
@@ -71,7 +88,7 @@ func (p *CrunchybridgeProvider) Resources(ctx context.Context) []func() resource
 
 func (p *CrunchybridgeProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
+		NewAccountDatasource,
 	}
 }
 

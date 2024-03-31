@@ -61,8 +61,9 @@ func (p *CrunchybridgeProvider) Configure(ctx context.Context, req provider.Conf
 
 	var opts []gocrunchybridge.Option
 
-	opts = append(opts,
-		gocrunchybridge.WithAPIKey(gocrunchybridge.APIKey(data.Secret.String())))
+	apiKey := gocrunchybridge.APIKey(data.Secret.String())
+
+	opts = append(opts, gocrunchybridge.WithAPIKey(apiKey))
 
 	if isStringEmpty(data.UserAgent.String()) {
 		if !data.UserAgent.IsNull() && !data.UserAgent.IsUnknown() {
